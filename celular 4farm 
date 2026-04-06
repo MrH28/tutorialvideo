@@ -1,0 +1,54 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+import geopandas as gpd
+import fiona
+
+# 0. Habilita suporte a KML
+fiona.drvsupport.supported_drivers['KML'] = 'rw'
+gpd.io.file.fiona.drvsupport.supported_drivers['KML'] = 'rw'
+
+# 1. Carregar apenas dados Celular KML
+gdf_c = gpd.read_file('celular.kml', driver='KML')
+
+# Extrair Lat/Lon/Alt para DataFrame (pontos)
+df_c = pd.DataFrame(gdf_c)
+df_c['Lat'] = df_c.geometry.apply(lambda p: p.y)
+df_c['Lon'] = df_c.geometry.apply(lambda p: p.x)
+df_c['Alt'] = df_c.get('altitude', 0).fillna(0)  # Ajuste se coluna diferente
+
+# 2. Converter Lat/Lon → Metros (Piracicaba UTM23S)
+def geo_to_utm(df):
+    lat0, lon0 = df['Lat'].mean(), df['Lon'].mean()
+    df['E'] = (df['Lon'] - lon0) * 111320 * np.cos(np.deg2rad(lat0))
+    df['N'] = (df['Lat'] - lat0) * 110540
+    return df
+
+df_c = geo_to_utm(df_c)
+
+# 3. Estatísticas ESALQ (apenas Celular)
+result = pd.DataFrame({
+    'Receptor': ['Celular 4Farm'],
+    'Pontos': [len(df_c)],
+    'σ_Horiz(m)': [np.sqrt((df_c[['E','N']].std()**2).mean())],
+    'σ_Alt(m)': [df_c['Alt'].std()],
+    'Erro95%(m)': [1.96 * np.sqrt((df_c[['E','N']].std()**2).mean())]
+})
+print(result.round(2))
+
+# 4. Gráficos relatório (nuvem e histograma)
+fig, (ax1, ax2) = plt.subplots(1,2, figsize=(12,5))
+
+# Nuvem de pontos
+ax1.scatter(df_c['E']*100, df_c['N']*100, c='red', s=10, label='Celular')
+ax1.set_xlabel('Leste (cm)'); ax1.set_ylabel('Norte (cm)')
+ax1.legend(); ax1.set_title('Nuvem Pontos 15min Estático - Celular')
+
+# Histograma erros
+erros_cm = np.sqrt(df_c['E']**2 + df_c['N']**2)*100
+ax2.hist(erros_cm, 20, alpha=0.7, color='red', label='Celular')
+ax2.set_title('Distribuição Erros (cm)'); ax2.legend()
+
+plt.tight_layout()
+plt.savefig('LEB0447_celular_resultados.png', dpi=300)
+plt.show()
