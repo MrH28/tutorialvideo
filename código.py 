@@ -1,0 +1,18 @@
+import pandas as pd
+import requests
+from io import BytesIO
+
+# Links diretos Zenodo BSSL V002 (305MB)
+base_url = 'https://zenodo.org/records/8361419/files/'
+files = {
+    'BSSL_DB_Key_Soils.xlsx': base_url + 'BSSL_DB_V002.xlsx?download=1',
+    'VIS_NIR_SWIR_Dataset': base_url + 'BSSL_DB_V002.xlsx?download=1',  # Sheet dentro
+    'BSSL_MIR_Dataset': base_url + 'BSSL_DB_V002.xlsx?download=1'       # Sheet dentro
+}
+
+print('🔄 Baixando BSSL_DB_V002.xlsx (contém todos datasets)...')
+r = requests.get(files['BSSL_DB_Key_Soils.xlsx'], stream=True)
+r.raise_for_status()
+
+print('📊 Lendo sheets e filtrando SÃO PAULO...')
+with pd.ExcelFile
