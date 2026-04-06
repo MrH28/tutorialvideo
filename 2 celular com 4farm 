@@ -1,0 +1,110 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+from lxml import etree
+
+# 1. Função para extrair coordenadas de KML (4Farm)
+def kml_to_df(kml_file):
+    tree = etree.parse(kml_file)
+    root = tree.getroot()
+    
+    coords = []
+    ns = {'kml': 'http://www.opengis.net/kml/2.2'}
+    
+    for placemark in root.findall('.//kml:Placemark', ns):
+        coord_text = placemark.find('.//kml:coordinates', ns)
+        if coord_text is not None:
+            for line in coord_text.text.strip().split():
+                try:
+                    lon, lat, alt = map(float, line.split(','))
+                    coords.append({'Lat': lat, 'Lon': lon, 'Alt': alt})
+                except:
+                    continue
+    
+    df = pd.DataFrame(coords)
+    print(f"📍 {kml_file}: {len(df)} pontos carregados")
+    return df
+
+# Carregar dois celulares 4Farm
+df_c1 = kml_to_df('celular1_4farm.kml')  # Celular 1
+df_c2 = kml_to_df('celular2_4farm.kml')  # Celular 2
+
+# 2. Converter Lat/Lon → Metros locais (Piracicaba UTM23S)
+def geo_to_utm(df):
+    lat0, lon0 = df['Lat'].mean(), df['Lon'].mean()
+    df['E'] = (df['Lon'] - lon0) * 111320 * np.cos(np.deg2rad(lat0))
+    df['N'] = (df['Lat'] - lat0) * 110540
+    return df
+
+df_c1 = geo_to_utm(df_c1)
+df_c2 = geo_to_utm(df_c2)
+
+# 3. Estatísticas ESALQ + Análise de Precisão
+def calc_precisao(df, nome):
+    sigma_h = np.sqrt((df[['E','N']].std()**2).mean())
+    erros_cm = np.sqrt(df['E']**2 + df['N']**2) * 100
+    return {
+        'Receptor': nome,
+        'Pontos': len(df),
+        'σ_Horiz(m)': sigma_h,
+        'σ_Alt(m)': df['Alt'].std(),
+        'Erro_Médio(cm)': erros_cm.mean(),
+        'σ_Erro(cm)': erros_cm.std(),
+        'Erro95%(m)': 1.96 * sigma_h
+    }
+
+result = pd.DataFrame([
+    calc_precisao(df_c1, 'Celular1 4Farm'),
+    calc_precisao(df_c2, 'Celular2 4Farm')
+])
+print("
+📊 === ESTATÍSTICAS DE PRECISÃO RTK (ESALQ) ===")
+print(result.round(3))
+
+# CONCLUSÃO AUTOMÁTICA
+print("
+🎯 === CONCLUSÃO ===")
+melhor = result.loc[result['Erro_Médio(cm)'].idxmin()]['Receptor']
+print(f"✅ MELHOR PRECISÃO: {melhor}")
+print(f"   Erro médio: {result['Erro_Médio(cm)'].min():.1f} cm")
+print(f"   Adequado para: {'RTK/Plantio' if result['Erro_Médio(cm)'].min() < 3 else 'Passadas/Grading'}")
+
+# 4. Gráficos profissionais
+fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 10))
+
+# Nuvem de pontos comparativa
+ax1.scatter(df_c1['E']*100, df_c1['N']*100, c='red', s=12, alpha=0.7, label='Celular1')
+ax1.scatter(df_c2['E']*100, df_c2['N']*100, c='orange', s=12, alpha=0.7, label='Celular2')
+ax1.set_xlabel('Leste (cm)'); ax1.set_ylabel('Norte (cm)')
+ax1.legend(); ax1.grid(True, alpha=0.3)
+ax1.set_title('Nuvem Pontos 15min Estático - Comparação')
+
+# Histogramas erros
+erros_c1 = np.sqrt(df_c1['E']**2 + df_c1['N']**2)*100
+erros_c2 = np.sqrt(df_c2['E']**2 + df_c2['N']**2)*100
+ax2.hist(erros_c1, 20, alpha=0.7, label='Celular1', color='red')
+ax2.hist(erros_c2, 20, alpha=0.7, label='Celular2', color='orange')
+ax2.axvline([erros_c1.mean(), erros_c2.mean()], color=['red','orange'], 
+            linestyle='--', label=['Média C1', 'Média C2'])
+ax2.legend(); ax2.grid(True, alpha=0.3)
+ax2.set_title('Distribuição Erros (cm)')
+
+# Boxplot comparativo
+ax3.boxplot([erros_c1, erros_c2], labels=['Celular1', 'Celular2'])
+ax3.set_ylabel('Erro Horizontal (cm)')
+ax3.set_title('Comparação Precisão (Boxplot)'); ax3.grid(True)
+
+# Altimetria
+ax4.plot(df_c1['Alt'], 'r-', label='Celular1', alpha=0.7)
+ax4.plot(df_c2['Alt'], 'orange', label='Celular2', alpha=0.7)
+ax4.set_ylabel('Altitude (m)'); ax4.legend(); ax4.grid(True)
+ax4.set_title('Variação Altimétrica')
+
+plt.tight_layout()
+plt.savefig('LEB0447_4farm_celulares.png', dpi=300, bbox_inches='tight')
+plt.show()
+
+# Exporta resultados
+result.to_csv('LEB0447_resultados_4farm.csv', index=False)
+print("💾 Arquivos salvos!")
+result
