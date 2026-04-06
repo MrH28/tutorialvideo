@@ -1,0 +1,59 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+import geopandas as gpd
+import fiona
+
+# 0. Habilita suporte a KML (obrigatório)
+fiona.drvsupport.supported_drivers['KML'] = 'rw'
+gpd.io.file.fiona.drvsupport.supported_drivers['KML'] = 'rw'
+
+# 1. Carregar dados KML (substitua pelos seus arquivos)
+gdf_g = gpd.read_file('garmin.kml', driver='KML')  # Garmin GLO 2
+gdf_c = gpd.read_file('celular.kml', driver='KML')  # Celular 4Farm
+
+# Extrair Lat/Lon/Alt para DataFrames (pontos; adapte se linhas/polígonos)
+df_g = pd.DataFrame(gdf_g)
+df_g['Lat'] = df_g.geometry.apply(lambda p: p.y)
+df_g['Lon'] = df_g.geometry.apply(lambda p: p.x)
+df_g['Alt'] = df_g.get('altitude', 0).fillna(0)  # Se não tiver alt, usa 0
+
+df_c = pd.DataFrame(gdf_c)
+df_c['Lat'] = df_c.geometry.apply(lambda p: p.y)
+df_c['Lon'] = df_c.geometry.apply(lambda p: p.x)
+df_c['Alt'] = df_c.get('altitude', 0).fillna(0)
+
+# 2. Converter Lat/Lon → Metros (Piracicaba UTM23S)
+def geo_to_utm(df):
+    lat0, lon0 = df['Lat'].mean(), df['Lon'].mean()
+    df['E'] = (df['Lon'] - lon0) * 111320 * np.cos(np.deg2rad(lat0))
+    df['N'] = (df['Lat'] - lat0) * 110540
+    return df
+
+df_g = geo_to_utm(df_g)
+df_c = geo_to_utm(df_c)
+
+# 3. Estatísticas ESALQ
+result = pd.DataFrame({
+    'Receptor': ['Garmin GLO 2', 'Celular 4Farm'],
+    'Pontos': [len(df_g), len(df_c)],
+    'σ_Horiz(m)': [np.sqrt((df_g[['E','N']].std()**2).mean()), 
+                   np.sqrt((df_c[['E','N']].std()**2).mean())],
+    'σ_Alt(m)': [df_g['Alt'].std(), df_c['Alt'].std()],
+    'Erro95%(m)': [1.96*np.sqrt((df_g[['E','N']].std()**2).mean()), 
+                   1.96*np.sqrt((df_c[['E','N']].std()**2).mean())]
+})
+print(result.round(2))
+
+# 4. Gráficos relatório
+fig, (ax1, ax2) = plt.subplots(1,2, figsize=(12,5))
+ax1.scatter(df_g['E']*100, df_g['N']*100, c='blue', s=10, label='Garmin')
+ax1.scatter(df_c['E']*100, df_c['N']*100, c='red', s=10, label='Celular')
+ax1.set_xlabel('Leste (cm)'); ax1.set_ylabel('Norte (cm)')
+ax1.legend(); ax1.set_title('Nuvem Pontos 15min Estático')
+
+ax2.hist(np.sqrt(df_g['E']**2 + df_g['N']**2)*100, 20, alpha=0.7, label='Garmin')
+ax2.hist(np.sqrt(df_c['E']**2 + df_c['N']**2)*100, 20, alpha=0.7, label='Celular')
+ax2.set_title('Distribuição Erros (cm)'); ax2.legend()
+plt.tight_layout(); plt.savefig('LEB0447_resultados_kml.png', dpi=300)
+plt.show()
