@@ -1,23 +1,30 @@
-🚀 MINI-CURSO: ESPECTROSCOPIA SOLO - VSCode + PYTHON COMPLETO
-📋 PARTE 1: INSTALAÇÃO PASSO A PASSO
+MINI-CURSO: ESPECTROSCOPIA SOLO - VSCode + PYTHON COMPLETO
+
+PARTE 1: INSTALAÇÃO PASSO A PASSO
+
 1.1 Instalar VSCode + Python
 1. Baixe VSCode: code.visualstudio.com
 2. Instale Python 3.11+: python.org/downloads (marque "Add to PATH")
 3. Teste: Abra CMD → python --version
+
 1.2 Extensões VSCode (Ctrl+Shift+X)
-✅ Python (Microsoft) ⭐
-✅ Jupyter ⭐  
-✅ GitHub Copilot ⭐
-✅ GitLens
-✅ Rainbow CSV
-✅ Excel Viewer
+ Python (Microsoft) 
+ Jupyter   
+ GitHub Copilot 
+ GitLens
+ Rainbow CSV
+ Excel Viewer
+
 1.3 Pacotes Terminal VSCode (Ctrl+`)
 pip install pandas numpy matplotlib seaborn scipy scikit-learn jupyter
 pip install openpyxl geopandas folium plotly
+
 1.4 GitHub + VSCode
+
 1. Crie conta github.com
 2. VSCode → Ctrl+Shift+P → "Git: Clone" 
 3. Cole URL repo → Auth GitHub
+
 1.5 Environment Python
 # Terminal VSCode
 python -m venv venv_solo
@@ -26,28 +33,31 @@ venv_soloScriptsactivate
 # Mac/Linux:
 source venv_solo/bin/activate
 pip install -r requirements.txt
+
 1.6 Jupyter Notebook
 1. Ctrl+Shift+P → "Jupyter: Create New Notebook"
 2. Canto superior direito → Selecione "Python 3.11"
 3. Shift+Enter → Executa célula
-📊 PARTE 2: CÓDIGOS PYTHON + README
+
+PARTE 2: CÓDIGOS PYTHON + README
+
 2.1 CARREGAR/VER DADOS
 # README: Carrega CSV solos e mostra estrutura básica
 # Objetivo: Validar dados antes análise espectral
+
+
 import pandas as pd
 import numpy as np
 
 # Ler CSV
 df = pd.read_csv('raw_data_mir_Saturin.csv')
 print("Shape:", df.shape)
-print("
-Cabeçalho:")
+print("Cabeçalho:")
 print(df.head(3))
-print("
-Colunas:", df.columns.tolist())
-print("
-Tipos:", df.dtypes)
-Saída esperada: (923, 928) amostras x colunas
+print("Colunas:", df.columns.tolist())
+print("Tipos:", df.dtypes)
+
+
 2.2 FILTRAR/CONTAR
 # README: Filtra município + conta amostras
 # Útil para análise regional
@@ -57,13 +67,13 @@ df_sp = df[df['municipio'] == 'Piracicaba']
 print(f"Amostras Piracicaba: {len(df_sp)}")
 
 # Contar por classe solo
-print("
-Por tipo solo:")
+print("Por tipo solo:")
 print(df['classe_solo'].value_counts())
 
 # Remover colunas/linhas
 df_clean = df.drop(['Unnamed: 0'], axis=1).dropna()
 print("Após limpeza:", df_clean.shape)
+
 2.3 ANÁLISE EXPLORATÓRIA/DESCRITIVA
 # README: Estatísticas básicas atributos solo
 # Pré-requisito ML predição
@@ -73,9 +83,10 @@ print("ESTATÍSTICAS SOLO:")
 print(df[solo_vars].describe())
 
 # Correlação atributos
-print("
-CORRELAÇÃO:")
+print("CORRELAÇÃO:")
 print(df[solo_vars].corr())
+
+
 2.4 EXTRAIR ESPECTROS VIS-NIR/MIR
 # README: Separa espectros de metadados
 # VIS-NIR: 400-2500nm | MIR: 4000-400cm-1
@@ -92,8 +103,11 @@ def extrair_espectros(df):
     return wavenumbers, spectra
 
 wavenumbers, spectra = extrair_espectros(df)
+
+
 2.5 PLOT ESPECTROS
 # README: Visualiza 5 espectros representativos
+
 import matplotlib.pyplot as plt
 
 plt.figure(figsize=(12,6))
@@ -109,8 +123,11 @@ plt.title('Espectros MIR Solo Brasileiro')
 plt.legend()
 plt.grid(alpha=0.3)
 plt.show()
+
+
 2.6 PRÉ-PROCESSAMENTO (SG + Derivadas)
 # README: Remove ruído + destaca features minerais
+
 from scipy.signal import savgol_filter
 
 # 1. Suavização Savitzky-Golay
@@ -121,8 +138,11 @@ spectra_deriv1 = savgol_filter(spectra_sg, 11, 3, deriv=1, axis=1)
 spectra_deriv2 = savgol_filter(spectra_sg, 11, 3, deriv=2, axis=1)
 
 print("✅ SG + Deriv1 + Deriv2 OK")
+
+
 2.7 CORRELAÇÃO ESPECTROS x ATRIBUTOS
 # README: Identifica bandas preditivas argila/C-org
+
 from scipy.stats import pearsonr
 
 def correlacao_espectros(df, spectra_proc, alvo='clay_gkg'):
@@ -142,6 +162,8 @@ def correlacao_espectros(df, spectra_proc, alvo='clay_gkg'):
     return correl
 
 cor_clay = correlacao_espectros(df, spectra_deriv1)
+
+
 2.8 IDENTIFICAR RUÍDO/FEIÇÕES
 # README: Detecta ruído + minerais por absorção
 def analisar_ruido_feicoes(spectra_sg):
@@ -158,8 +180,12 @@ def analisar_ruido_feicoes(spectra_sg):
     for wn, mineral in feicoes.items():
         idx = np.argmin(np.abs(wavenumbers - wn))
         print(f"{wn} cm-1: {mineral} (SNR: {snr[idx]:.1f})")
+
+
 2.9 MODELAGEM PCA + CLUSTER
 # README: Reduz 923 dims → 10 PCs + identifica estratos
+
+
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
@@ -184,8 +210,12 @@ plt.subplot(122)
 plt.bar(['PC1','PC2','PC3'], pca.explained_variance_ratio_[:3])
 plt.title('Variância PCs')
 plt.show()
+
+
 2.10 RANDOM FOREST PREDIÇÃO
 # README: Prediz clay/sand/C-org com PCs
+
+
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score
@@ -204,8 +234,11 @@ def rf_predicao(df, pc_result, alvo):
 
 rf_clay, r2_clay = rf_predicao(df, pc_result, 'clay_gkg')
 rf_sand, r2_sand = rf_predicao(df, pc_result, 'sand_gkg')
+
+
 2.11 ZONAS MANEJO (Clusters)
 # README: Delimita zonas químicas para manejo variável
+
 df['zona_manejo'] = clusters
 
 print("ZONAS IDENTIFICADAS:")
@@ -218,8 +251,10 @@ scatter = plt.scatter(df['X'], df['Y'], c=df['zona_manejo'],
 plt.colorbar(scatter, label='Zona Manejo')
 plt.title('Zonas Químicas por Espectroscopia')
 plt.show()
+
+
 📁 README PRINCIPAL - COMO USAR
-🚀 MINI-CURSO ESPECTROSCOPIA SOLO COMPLETO
+ ESPECTROSCOPIA SOLO COMPLETO
 
 1. INSTALAÇÃO (15min):
    VSCode + Python → pip install pandas scipy scikit-learn jupyter
@@ -236,4 +271,3 @@ plt.show()
    • Picos minerais identificados
 
 5. GitHub: Ctrl+Shift+P → "Git: Clone"
-Copie → Execute célula por célula → Projeto pronto em 1h! 🌟🇧🇷
