@@ -1,20 +1,24 @@
-🚀 MINI-CURSO: ESPECTROSCOPIA PROXIMAL + PYTHON + VSCode
-📚 PARTE 1: INSTALAÇÃO PASSO A PASSO
+MINI-CURSO: ESPECTROSCOPIA PROXIMAL + PYTHON + VSCode
+
+PARTE 1: INSTALAÇÃO PASSO A PASSO
+
 1.1 INSTALAR VSCode + PYTHON
 1. Baixe VSCode: https://code.visualstudio.com/
 2. Instale Python 3.11+: https://www.python.org/downloads/
-3. Durante instalação Python: ✅ MARQUE "Add to PATH"
+3. Durante instalação Python: - MARQUE "Add to PATH"
 4. Reinicie o PC
+
 1.2 EXTENSÕES VSCode (OBRIGATÓRIAS)
 Ctrl+Shift+X → Pesquise e instale:
-✅ Python (Microsoft)
-✅ Jupyter 
-✅ GitHub Pull Requests 
-✅ GitLens 
-✅ Excel Viewer 
-✅ KML Viewer 
-✅ GitHub Copilot (se tiver acesso)
-✅ Earth Engine API 
+ Python (Microsoft)
+ Jupyter 
+ GitHub Pull Requests 
+ GitLens 
+ Excel Viewer 
+ KML Viewer 
+ GitHub Copilot (se tiver acesso)
+ Earth Engine API 
+
 1.3 TERMINAL VSCode - INSTALAR PACOTES
 Ctrl+` (acento grave) → Abre terminal integrado
 
@@ -22,6 +26,7 @@ Digite estes comandos UM POR UM:
 pip install numpy pandas matplotlib seaborn scikit-learn jupyter plotly folium geopandas openpyxl xlrd
 pip install scipy spectral python-savitzky-golay cubist rasterio earthengine-api
 pip install plotly kaleido geemap
+
 1.4 PYTHON ENVIRONMENT + JUPYTER
 # Criar ambiente virtual
 python -m venv venv_solo
@@ -40,11 +45,14 @@ python -m ipykernel install --user --name=venv_solo
 
 # Jupyter Notebook
 jupyter notebook
+
 1.5 GIT + GITHUB NO VSCode
 1. Ctrl+Shift+P → "Git: Clone"
 2. Cole URL do seu repo GitHub
 3. Ctrl+Shift+P → "Python: Select Interpreter" → venv_solo
-📖 PARTE 2: CÓDIGO PYTHON COMPLETO
+
+PARTE 2: CÓDIGO PYTHON COMPLETO
+
 2.1 CARREGAR + EXPLORAR DADOS
 # README: CARREGAR DADOS ESPECTROSCOPIA
 # ===================================
@@ -65,17 +73,17 @@ df_nir = pd.read_csv('raw_nir_data_saturin.csv')
 df_mir = pd.read_csv('raw_mir_data_saturin.csv')
 
 # EXCEL
-df_excel = pd.read_excel('analises_solo.xlsx', sheet_name='Plan1')
+# df_excel = pd.read_excel('analises_solo.xlsx', sheet_name='Plan1')
 
 # KML → CSV primeiro (QGIS/export)
-df_kml = pd.read_csv('amostras_solo.kml.csv')
+# df_kml = pd.read_csv('amostras_solo.kml.csv')
 
-print("📊 Shape:", df_nir.shape)
-print("📋 Primeiras linhas:
-", df_nir.head())
-print("📋 Colunas:", df_nir.columns.tolist())
-print("📈 Info:
-", df_nir.info())
+print("Shape:", df_nir.shape)
+print("Primeiras linhas:", df_nir.head())
+print("Colunas:", df_nir.columns.tolist())
+print("Info:", df_nir.info())
+
+
 2.2 LIMPAR + FILTRAR DADOS
 # README: LIMPEZA DE DADOS
 # =======================
@@ -92,19 +100,20 @@ df_clean = df_clean.drop_duplicates(subset=['id'])
 
 # FILTRAR MUNICÍPIO (exemplo)
 df_sp = df_clean[df_clean['municipio'] == 'Piracicaba']
-print(f"🔢 Amostras Piracicaba: {len(df_sp)}")
+print(f" Amostras Piracicaba: {len(df_sp)}")
 
 # CONTAGEM POR CLASSE SOLO
-print("
-👥 Contagem por classe:")
+print("Contagem por classe:")
 print(df_sp['classe_solo'].value_counts())
+
+
 2.3 ANÁLISE EXPLORATÓRIA
 # README: EDA COMPLETA
 # ====================
 # Estatística descritiva + gráficos
 
 # DESCRITIVA
-print("📊 Estatística descritiva:")
+print("Estatística descritiva:")
 desc = df_sp[['SOC', 'pH', 'P', 'K', 'Argila']].describe()
 print(desc)
 
@@ -116,6 +125,8 @@ plt.title('Correlação Atributos Solo')
 plt.tight_layout()
 plt.savefig('corr_solo.png', dpi=300)
 plt.show()
+
+
 2.4 VISUALIZAR ESPECTROS
 # README: PLOT ESPECTROS VIS-NIR-MIR
 # =================================
@@ -147,9 +158,12 @@ plot_espectros(df_nir, cols_nir, 'VIS-NIR-SWIR')
 # BANDAS MIR  
 cols_mir = [col for col in df_mir.columns if col.isdigit() and 2500 <= int(col) <= 16000]
 plot_espectros(df_mir, cols_mir, 'MIR')
+
+
 2.5 PRÉ-PROCESSAMENTO ESPECTRAL
 # README: FILTROS + DERIVADAS
 # ===========================
+
 from scipy.signal import savgol_filter
 
 def preprocess_espectral(X, wl):
@@ -176,6 +190,8 @@ def preprocess_espectral(X, wl):
 
 # APLICAR
 espectros_proc = preprocess_espectral(df_nir[cols_nir].values, cols_nir)
+
+
 2.6 CORRELAÇÕES ESPECTRO-SC + PREDIÇÃO RÁPIDA
 # README: CORRELAÇÃO ESPECTRAL
 # ============================
@@ -198,14 +214,15 @@ def correlacao_espectral(df, cols_spec, target_col):
     
     # TOP 10 bandas
     top_bands = pd.DataFrame({'wl': cols_spec, 'corr': corr}).nlargest(10, 'corr')
-    print(f"
-🏆 Top 10 bandas para {target_col}:")
+    print(f"Top 10 bandas para {target_col}:")
     print(top_bands)
 
 # CORRELAÇÕES IMPORTANTES AGRICULTURA
 correlacao_espectral(df_nir, cols_nir, 'Argila')
 correlacao_espectral(df_nir, cols_nir, 'SOC')
 correlacao_espectral(df_nir, cols_nir, 'pH')
+
+
 2.7 PCA + CLUSTERS
 # README: PCA + KMEANS ZONAS MANEJO
 # ================================
@@ -246,6 +263,8 @@ plt.title('Argila por cluster')
 plt.tight_layout()
 plt.savefig('pca_clusters.png', dpi=300)
 plt.show()
+
+
 2.8 MODELOS PREDITIVOS (Cubist + RF)
 # README: PREDIÇÃO CUBIST + RANDOM FOREST
 # ======================================
@@ -266,7 +285,7 @@ rf = RandomForestRegressor(n_estimators=200, random_state=42)
 rf.fit(X_train, y_train)
 y_pred = rf.predict(X_test)
 
-print(f"🎯 RF Argila: R²={r2_score(y_test, y_pred):.3f}")
+print(f"RF Argila: R²={r2_score(y_test, y_pred):.3f}")
 print(f"RMSE={mean_squared_error(y_test, y_pred, squared=False):.2f}%")
 
 # IMPORTÂNCIA VARIÁVEIS
@@ -275,9 +294,10 @@ importancia = pd.DataFrame({
     'importancia': rf.feature_importances_
 }).nlargest(10, 'importancia')
 
-print("
-🏆 Top 10 bandas preditivas Argila:")
+print("Top 10 bandas preditivas Argila:")
 print(importancia)
+
+
 2.9 IDENTIFICAR MINERAIS + ABSORÇÃO
 # README: FEIÇÕES MINERAIS ESPECTRAIS
 # ==================================
@@ -314,7 +334,8 @@ def identificar_minerais(df, cols_spec):
     plt.show()
 
 identificar_minerais(df_nir, cols_nir)
-🎯 WORKFLOW COMPLETO AGRO 1 CLIQUE
+
+WORKFLOW COMPLETO AGRO 1 CLIQUE
 # README: EXECUTAR TUDO
 # =====================
 # Salve como "analise_solo_completa.py"
@@ -347,4 +368,3 @@ Ctrl+B     → Sidebar
 2. Copilot: Ctrl+I → "Explicar este código"
 3. Copilot: Alt+/ → Autocomplete
 4. GitHub: Ctrl+Shift+G → Commit/Push
-AGORA VOCÊ TEM TUDO PARA FAZER ESPECTROSCOPIA PROFISSIONAL! 🎉
