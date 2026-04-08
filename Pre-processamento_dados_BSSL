@@ -1,0 +1,37 @@
+import pandas as pd
+
+# ==============================================
+# 1. CARREGAR O ARQUIVO EXCEL
+# ==============================================
+arquivo_entrada = 'BSSL_DB_key_Soils.xlsx'
+
+# Ler cada planilha separadamente
+df_atributos = pd.read_excel(arquivo_entrada, sheet_name='BSSL.SoilAttribuies.Dataset')
+df_vis_nir = pd.read_excel(arquivo_entrada, sheet_name='Vis.NIR_SWIR.DataSet')
+df_mir = pd.read_excel(arquivo_entrada, sheet_name='BSSL_MIR_Dataset')
+
+# ==============================================
+# 2. FILTRAR DADOS DE SÃO PAULO
+# ==============================================
+# Ajuste o nome da coluna se necessário (ex: 'Estado', 'UF', 'State')
+estado_alvo = 'São Paulo'  # ou 'SP' dependendo do seu arquivo
+
+df_sp_atributos = df_atributos[df_atributos['Estado'] == estado_alvo].copy()
+df_sp_vis_nir = df_vis_nir[df_vis_nir['Estado'] == estado_alvo].copy()
+df_sp_mir = df_mir[df_mir['Estado'] == estado_alvo].copy()
+
+# ==============================================
+# 3. SALVAR EM NOVO ARQUIVO EXCEL
+# ==============================================
+arquivo_saida = 'BSSL_DB_key_Soils_SP.xlsx'
+
+with pd.ExcelWriter(arquivo_saida, engine='openpyxl') as writer:
+    df_sp_atributos.to_excel(writer, sheet_name='BSSL.SoilAttribuies.Dataset', index=False)
+    df_sp_vis_nir.to_excel(writer, sheet_name='Vis.NIR_SWIR.DataSet', index=False)
+    df_sp_mir.to_excel(writer, sheet_name='BSSL_MIR_Dataset', index=False)
+
+print(f"✅ Dados de {estado_alvo} filtrados e salvos em: {arquivo_saida}")
+print(f"📊 Registros encontrados:")
+print(f"   - Atributos do solo: {len(df_sp_atributos)}")
+print(f"   - VIS-NIR-SWIR: {len(df_sp_vis_nir)}")
+print(f"   - MIR: {len(df_sp_mir)}")
