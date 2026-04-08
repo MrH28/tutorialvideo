@@ -1,0 +1,48 @@
+import requests
+import pandas as pd
+from pathlib import Path
+
+# URL direta do Zenodo (versão confirmada com sheets corretas)
+url = 'https://zenodo.org/records/8092774/files/BSSL_DB_key_Soils.xlsx?download=1'
+local_file = Path('BSSL_DB_key_Soils.xlsx')
+
+# Download do arquivo
+if not local_file.exists():
+    print('Baixando arquivo...')
+    response = requests.get(url)
+    response.raise_for_status()
+    with open(local_file, 'wb') as f:
+        f.write(response.content)
+    print('Download concluído!')
+else:
+    print('Arquivo já existe localmente.')
+
+# Carrega o Excel com engine openpyxl
+xl = pd.ExcelFile(local_file, engine='openpyxl')
+
+# Lista das 3 primeiras sheets (nomes exatos do dataset)
+sheets = ['BSSL.SoilAttribuies.Dataset', 'Vis.NIR_SWIR.DataSet', 'BSSL_MIR_Dataset']
+# Ajuste se nomes exatos diferirem ligeiramente (verifique xl.sheet_names)
+
+dados_filtrados = {}
+for sheet_name in sheets:
+    if sheet_name in xl.sheet_names:
+        df = pd.read_excel(local_file, sheet_name=sheet_name, engine='openpyxl')
+        # Filtra por State == 'SP' ou 'São Paulo' (case insensitive)
+        if 'State' in df.columns:
+            mask = df['State'].str.contains('SP|São Paulo', case=False, na=False)
+            df_sp = df[mask].copy()
+            dados_filtrados[sheet_name] = df_sp
+            print(f'{sheet_name}: {len(df_sp)} linhas para SP (total original: {len(df)})')
+        else:
+            print(f'Coluna "State" não encontrada em {sheet_name}')
+    else:
+        print(f'Sheet {sheet_name} não encontrada')
+
+# Salva novo Excel com as 3 planilhas filtradas
+output_file = 'BSSL_DB_key_Soils_SP.xlsx'
+with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
+    for sheet_name, df in dados_filtrados.items():
+        df.to_excel(writer, sheet_name=sheet_name, index=False)
+
+print(f'Arquivo salvo: {output_file}')
