@@ -1,0 +1,246 @@
+import pandas as pd
+import unicodedata
+
+# ==============================================
+# 1. CARREGAR O ARQUIVO EXCEL
+# ==============================================
+
+arquivo_entrada = 'BSSL_DB_Key_Soils.xlsx'
+xlsx = pd.ExcelFile(arquivo_entrada)
+
+print('Planilhas encontradas no arquivo:')
+for sheet_name in xlsx.sheet_names:
+    print(f'- {sheet_name}')
+
+def normalizar_nome(texto):
+    texto = unicodedata.normalize('NFKD', str(texto)).encode('ascii', 'ignore').decode('ascii')
+    return ''.join(ch.lower() for ch in texto if ch.isalnum())
+
+# Mapeia nomes normalizados -> nome real da planilha no arquivo
+sheet_map = {normalizar_nome(nome): nome for nome in xlsx.sheet_names}
+
+def obter_planilha(*candidatos):
+    for cand in candidatos:
+        chave = normalizar_nome(cand)
+        if chave in sheet_map:
+            return sheet_map[chave]
+    raise ValueError(f'Nenhuma planilha correspondente encontrada para: {candidatos}')
+
+# Ler cada planilha separadamente com nomes tolerantes a variações
+planilha_atributos = obter_planilha('BSSL.SoilAttributes.Dataset', 'BSSL.SoilAttribuies.Dataset')
+planilha_vis_nir = obter_planilha('Vis.NIR_SWIR.DataSet', 'VIS_NIR_SWIR_Dataset')
+planilha_mir = obter_planilha('BSSL_MIR_Dataset', 'BSSL.MIR.Dataset')
+
+df_atributos = pd.read_excel(arquivo_entrada, sheet_name=planilha_atributos)
+df_vis_nir = pd.read_excel(arquivo_entrada, sheet_name=planilha_vis_nir)
+df_mir = pd.read_excel(arquivo_entrada, sheet_name=planilha_mir)
+
+print('\nPlanilhas carregadas com sucesso:')
+print(f'- Atributos: {planilha_atributos}')
+print(f'- VIS-NIR-SWIR: {planilha_vis_nir}')
+print(f'- MIR: {planilha_mir}')
+
+# ==============================================
+# 2. FILTRAR DADOS DE SAO PAULO
+# ==============================================
+estado_alvo = 'Sao Paulo'  # aceita tambem registros como 'São Paulo' ou 'SP'
+
+def normalizar_texto(texto):
+    texto = unicodedata.normalize('NFKD', str(texto)).encode('ascii', 'ignore').decode('ascii')
+    return ''.join(ch.lower() for ch in texto if ch.isalnum())
+
+def detectar_coluna(df, candidatos):
+    mapa_colunas = {normalizar_texto(col): col for col in df.columns}
+    for nome in candidatos:
+        chave = normalizar_texto(nome)
+        if chave in mapa_colunas:
+            return mapa_colunas[chave]
+    return None
+
+def filtrar_por_estado(df):
+    col_estado = detectar_coluna(df, ['Estado', 'UF', 'State', 'Provincia', 'Province'])
+    if col_estado is None:
+        return None, None
+    valores_sp = {'saopaulo', 'sp'}
+    serie_norm = df[col_estado].astype(str).apply(normalizar_texto)
+    return df[serie_norm.isin(valores_sp)].copy(), col_estado
+
+def filtrar_por_ids(df, ids_referencia):
+    col_id = detectar_coluna(df, ['ID_Unique', 'IDUnique', 'Sample_ID', 'SampleID', 'Owner_code', 'Owner_code '])
+    if col_id is None:
+        raise KeyError(f'Nao foi possivel detectar coluna de ID em: {list(df.columns)}')
+    serie_id = df[col_id].astype(str).apply(normalizar_texto)
+    return df[serie_id.isin(ids_referencia)].copy(), col_id
+
+# 1) Filtra a planilha de atributos por estado/UF
+df_sp_atributos, col_estado_atributos = filtrar_por_estado(df_atributos)
+if df_sp_atributos is None:
+    raise KeyError(f'Nenhuma coluna de estado/UF encontrada em Atributos. Colunas: {list(df_atributos.columns)}')
+
+# 2) Usa os IDs de SP para filtrar as demais planilhas
+col_id_atributos = detectar_coluna(df_sp_atributos, ['ID_Unique', 'IDUnique', 'Sample_ID', 'SampleID', 'Owner_code', 'Owner_code '])
+if col_id_atributos is None:
+    raise KeyError(f'Nenhuma coluna de ID encontrada em Atributos. Colunas: {list(df_sp_atributos.columns)}')
+
+ids_sp = set(df_sp_atributos[col_id_atributos].astype(str).apply(normalizar_texto))
+
+df_sp_vis_nir, col_vis_nir = filtrar_por_estado(df_vis_nir)
+if df_sp_vis_nir is None:
+    df_sp_vis_nir, col_vis_nir = filtrar_por_ids(df_vis_nir, ids_sp)
+    origem_vis = f'ID ({col_vis_nir})'
+else:
+    origem_vis = f'Estado ({col_vis_nir})'
+
+df_sp_mir, col_mir = filtrar_por_estado(df_mir)
+if df_sp_mir is None:
+    df_sp_mir, col_mir = filtrar_por_ids(df_mir, ids_sp)
+    origem_mir = f'ID ({col_mir})'
+else:
+    origem_mir = f'Estado ({col_mir})'
+
+print('Filtro aplicado com sucesso:')
+print(f'- Atributos por Estado: {col_estado_atributos}')
+print(f'- VIS-NIR-SWIR por: {origem_vis}')
+print(f'- MIR por: {origem_mir}')
+
+print('\nRegistros encontrados para Sao Paulo/SP:')
+print(f'- Atributos: {len(df_sp_atributos)}')
+print(f'- VIS-NIR-SWIR: {len(df_sp_vis_nir)}')
+print(f'- MIR: {len(df_sp_mir)}')
+
+
+
+# ==============================================
+# 3. SALVAR EM NOVO ARQUIVO EXCEL E CSV
+# ==============================================
+arquivo_saida = 'BSSL_DB_V002.xlsx'
+csv_vis = 'VIS_DataSet_SP.csv'
+csv_nir = 'NIR_DataSet_SP.csv'
+csv_mir = 'MIR_DataSet_SP.csv'
+csv_atributos = 'Atributos_SP.csv'
+
+if len(df_sp_vis_nir) == 0:
+    raise ValueError('A planilha filtrada VIS.NIR_DataSet ficou vazia. Verifique as chaves de filtro.')
+
+def separar_faixa_espectral(df, nm_min, nm_max):
+    colunas_meta = []
+    colunas_faixa = []
+    for col in df.columns:
+        try:
+            nm = float(col)
+            if nm_min <= nm <= nm_max:
+                colunas_faixa.append(col)
+        except (ValueError, TypeError):
+            colunas_meta.append(col)
+    return df[colunas_meta + colunas_faixa].copy(), len(colunas_faixa)
+
+# VIS: 350-700 nm | NIR: 701-2500 nm (inclui SWIR no arquivo de entrada)
+df_sp_vis, qtd_vis_cols = separar_faixa_espectral(df_sp_vis_nir, 350, 700)
+df_sp_nir, qtd_nir_cols = separar_faixa_espectral(df_sp_vis_nir, 701, 2500)
+
+if qtd_vis_cols == 0:
+    raise ValueError('Nenhuma coluna espectral VIS (350-700 nm) encontrada.')
+if qtd_nir_cols == 0:
+    raise ValueError('Nenhuma coluna espectral NIR (701-2500 nm) encontrada.')
+
+with pd.ExcelWriter(arquivo_saida, engine='openpyxl') as writer:
+    df_sp_vis.to_excel(writer, sheet_name='VIS_DataSet', index=False)
+    df_sp_nir.to_excel(writer, sheet_name='NIR_DataSet', index=False)
+    df_sp_mir.to_excel(writer, sheet_name='MIR_DataSet', index=False)
+    df_sp_atributos.to_excel(writer, sheet_name='Atributos', index=False)
+
+df_sp_vis.to_csv(csv_vis, index=False)
+df_sp_nir.to_csv(csv_nir, index=False)
+df_sp_mir.to_csv(csv_mir, index=False)
+df_sp_atributos.to_csv(csv_atributos, index=False)
+
+print(f"Dados de {estado_alvo} filtrados e salvos em: {arquivo_saida}")
+print("Registros encontrados:")
+print(f"   - VIS: {len(df_sp_vis)}")
+print(f"   - NIR: {len(df_sp_nir)}")
+print(f"   - MIR: {len(df_sp_mir)}")
+print(f"   - Atributos: {len(df_sp_atributos)}")
+
+print("\nArquivos CSV gerados:")
+print(f"   - {csv_vis}")
+print(f"   - {csv_nir}")
+print(f"   - {csv_mir}")
+print(f"   - {csv_atributos}")
+
+
+# ==============================================
+# 4. MOSTRAR TABELAS FILTRADAS NA ORDEM SOLICITADA
+# ==============================================
+print('1) Tabela VIS filtrada (20 primeiras linhas):')
+display(df_sp_vis.head(20))
+
+print('2) Tabela NIR filtrada (20 primeiras linhas):')
+display(df_sp_nir.head(20))
+
+print('3) Tabela MIR filtrada (20 primeiras linhas):')
+display(df_sp_mir.head(20))
+
+print('4) Tabela Atributos filtrada (20 primeiras linhas):')
+display(df_sp_atributos.head(20))
+
+# 5. MOSTRAR E SALVAR VIS.NIR_DATASET
+csv_vis_nir = 'VIS.NIR_DataSet_SP.csv'
+df_sp_vis_nir.to_csv(csv_vis_nir, index=False)
+
+print(f'Arquivo salvo: {csv_vis_nir}')
+print('Pré-visualização VIS.NIR_DataSet (20 primeiras linhas):')
+display(df_sp_vis_nir.head(20))
+
+
+# 6. MOSTRAR ATRIBUTOS + VIS.NIR NA MESMA TABELA E SALVAR
+csv_atributos_vis_nir = 'Atributos_VIS.NIR_SP.csv'
+
+col_id_attr = detectar_coluna(df_sp_atributos, ['ID_Unique', 'IDUnique', 'Sample_ID', 'SampleID', 'Owner_code', 'Owner_code '])
+col_id_visnir = detectar_coluna(df_sp_vis_nir, ['ID_Unique', 'IDUnique', 'Sample_ID', 'SampleID', 'Owner_code', 'Owner_code '])
+
+if col_id_attr is None or col_id_visnir is None:
+    raise KeyError('Nao foi possivel encontrar coluna de ID para combinar Atributos e VIS.NIR.')
+
+df_atributos_base = df_sp_atributos.copy()
+df_vis_nir_base = df_sp_vis_nir.copy()
+
+if col_id_attr != col_id_visnir:
+    df_vis_nir_base = df_vis_nir_base.rename(columns={col_id_visnir: col_id_attr})
+
+df_atributos_vis_nir = pd.merge(
+    df_atributos_base,
+    df_vis_nir_base,
+    on=col_id_attr,
+    how='inner',
+    suffixes=('_atributos', '_visnir')
+)
+
+df_atributos_vis_nir.to_csv(csv_atributos_vis_nir, index=False)
+
+print(f'Arquivo salvo: {csv_atributos_vis_nir}')
+print(f'Total de linhas na tabela combinada: {len(df_atributos_vis_nir)}')
+print('Pre-visualizacao Atributos + VIS.NIR (20 primeiras linhas):')
+display(df_atributos_vis_nir.head(20))
+
+# 7. MOSTRAR ATRIBUTOS + MIR NA MESMA TABELA E SALVAR
+csv_atributos_mir = 'Atributos_MIR_SP.csv'
+
+col_id_attr = detectar_coluna(df_sp_atributos, ['ID_Unique', 'IDUnique', 'Sample_ID', 'SampleID', 'Owner_code', 'Owner_code '])
+col_id_mir = detectar_coluna(df_sp_mir, ['ID_Unique', 'IDUnique', 'Sample_ID', 'SampleID', 'Owner_code', 'Owner_code '])
+
+if col_id_attr is None or col_id_mir is None:
+    raise KeyError('Nao foi possivel encontrar coluna de ID para combinar Atributos e MIR.')
+
+df_atributos_base = df_sp_atributos.copy()
+df_mir_base = df_sp_mir.copy()
+
+if col_id_attr != col_id_mir:
+    df_mir_base = df_mir_base.rename(columns={col_id_mir: col_id_attr})
+
+df_atributos_mir = pd.merge(
+    df_atributos_base,
+    df_mir_base,
+    on=col_id_attr,
+    how='inner',
+    suffixes=('_atributos', '_mir')
+)
